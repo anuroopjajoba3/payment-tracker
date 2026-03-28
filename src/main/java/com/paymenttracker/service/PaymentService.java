@@ -5,8 +5,8 @@ import com.paymenttracker.exception.PaymentNotFoundException;
 import com.paymenttracker.model.Payment;
 import com.paymenttracker.model.PaymentStatus;
 import com.paymenttracker.repository.PaymentRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,11 +15,14 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class PaymentService {
 
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
     private final PaymentRepository paymentRepository;
+
+    public PaymentService(PaymentRepository paymentRepository) {
+        this.paymentRepository = paymentRepository;
+    }
 
     @Transactional
     public PaymentDTO.Response createPayment(PaymentDTO.CreateRequest request) {
@@ -47,35 +50,24 @@ public class PaymentService {
     }
 
     public List<PaymentDTO.Response> getAllPayments() {
-        return paymentRepository.findAll()
-                .stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+        return paymentRepository.findAll().stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     public List<PaymentDTO.Response> getPaymentsBySender(String senderId) {
-        return paymentRepository.findBySenderId(senderId)
-                .stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+        return paymentRepository.findBySenderId(senderId).stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     public List<PaymentDTO.Response> getPaymentsByStatus(PaymentStatus status) {
-        return paymentRepository.findByStatus(status)
-                .stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+        return paymentRepository.findByStatus(status).stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     @Transactional
     public PaymentDTO.Response updatePaymentStatus(Long id, PaymentDTO.UpdateStatusRequest request) {
         Payment payment = paymentRepository.findById(id)
                 .orElseThrow(() -> new PaymentNotFoundException("Payment not found with id: " + id));
-
         log.info("Updating payment {} status from {} to {}", id, payment.getStatus(), request.getStatus());
         payment.setStatus(request.getStatus());
-        Payment updated = paymentRepository.save(payment);
-        return toResponse(updated);
+        return toResponse(paymentRepository.save(payment));
     }
 
     @Transactional
@@ -89,14 +81,11 @@ public class PaymentService {
     public PaymentDTO.SummaryResponse getSenderSummary(String senderId) {
         List<Payment> payments = paymentRepository.findBySenderId(senderId);
         BigDecimal totalSent = paymentRepository.getTotalSentBySender(senderId);
-
         PaymentDTO.SummaryResponse summary = new PaymentDTO.SummaryResponse();
         summary.setSenderId(senderId);
         summary.setTotalPayments(payments.size());
-        summary.setCompletedPayments(payments.stream()
-                .filter(p -> p.getStatus() == PaymentStatus.COMPLETED).count());
-        summary.setPendingPayments(payments.stream()
-                .filter(p -> p.getStatus() == PaymentStatus.PENDING).count());
+        summary.setCompletedPayments(payments.stream().filter(p -> p.getStatus() == PaymentStatus.COMPLETED).count());
+        summary.setPendingPayments(payments.stream().filter(p -> p.getStatus() == PaymentStatus.PENDING).count());
         summary.setTotalAmountSent(totalSent != null ? totalSent : BigDecimal.ZERO);
         return summary;
     }
